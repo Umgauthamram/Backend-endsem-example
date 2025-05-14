@@ -1,3 +1,52 @@
+npm i express dotenv bcryptjs jsonwebtoken cookie-parser
+
+SERVER.js
+
+const express = require('express');
+const cookieParser = require('cookie-parser');
+const route = require('./route');
+require('dotenv').config();
+
+const app = express();
+const PORT = 8000;
+
+app.use(express.json());
+app.use(cookieParser());
+app.use('/api', route);
+
+app.get('/', (req, res) => res.send('Server running...'));
+
+app.listen(PORT, () => {
+  console.log(`Server is running on port http://localhost:${PORT}`);
+});
+
+MIDDLEWARE.JS
+
+const jwt = require('jsonwebtoken');
+
+const userAuth = async (req, res, next) => {
+    try {
+        const { token } = req.cookies;
+        if (!token) {
+            return res.status(401).json({ message: "Unauthorized: No token" });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (!decoded) {
+            return res.status(403).json({ message: "Unauthorized: Invalid token" });
+        }
+
+        req.userName = decoded.userName; 
+        next();
+    } catch (error) {
+        res.status(401).json({ message: "Unauthorized", error });
+    }
+};
+
+module.exports = userAuth;
+
+
+userController.js
 
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -79,3 +128,18 @@ const getFeed = async (req, res) => {
 };
 
 module.exports = { register, login, feedBack, getFeed };
+
+
+routes.js
+
+const express = require('express');
+const router = express.Router();
+const { register, login, feedBack, getFeed } = require('./userController');
+const userAuth = require('./middleware');
+
+router.post('/register', register);
+router.post('/login', login);
+router.post('/feedBack', userAuth, feedBack);
+router.get('/getFeed', userAuth, getFeed);
+
+module.exports = router;
