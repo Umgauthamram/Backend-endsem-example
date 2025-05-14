@@ -1,10 +1,9 @@
 const jwt = require("jsonwebtoken");
 
-function authenticateToken(req, res, next) {
+const authenticate = (req, res, next) => {
     const token = req.cookies.token;
-
     if (!token) {
-        return res.status(401).json({ message: "Missing token" });
+        return res.status(401).json({ message: "Unauthorized: No token provided." });
     }
 
     try {
@@ -12,8 +11,8 @@ function authenticateToken(req, res, next) {
         req.username = decoded.username;
         next();
     } catch (err) {
-        return res.status(403).json({ message: "Invalid token" });
+        return res.status(401).json({ message: "Unauthorized: Invalid token." });
     }
-}
+};
 
-module.exports = authenticateToken;
+module.exports = authenticate;

@@ -1,6 +1,6 @@
 const { users } = require("../models/User");
 
-exports.postFeedback = (req, res) => {
+const postFeedback = (req, res) => {
     const { service_name, feedback_text } = req.body;
     const user = users.find(u => u.username === req.username);
 
@@ -12,7 +12,7 @@ exports.postFeedback = (req, res) => {
     res.status(200).json({ message: "Feedback submitted" });
 };
 
-exports.getFeedback = (req, res) => {
+const getFeedback = (req, res) => {
     const user = users.find(u => u.username === req.username);
 
     if (!user) {
@@ -20,4 +20,9 @@ exports.getFeedback = (req, res) => {
     }
 
     res.status(200).json({ feedbacks: user.feedbacks });
+};
+
+module.exports = {
+    postFeedback,
+    getFeedback
 };

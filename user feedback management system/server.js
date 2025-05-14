@@ -1,17 +1,26 @@
 const express = require("express");
 const cookieParser = require("cookie-parser");
+const dotenv = require("dotenv");
+
 const authRoutes = require("./routes/authRoutes");
 const feedbackRoutes = require("./routes/feedbackRoutes");
-require("dotenv").config();
+
+dotenv.config();
 
 const app = express();
+
 app.use(express.json());
 app.use(cookieParser());
 
-app.use("/api/auth", authRoutes);
+app.use("/api", authRoutes);
 app.use("/api", feedbackRoutes);
 
-const PORT = process.env.PORT || 3010;
+app.get("/", (req, res) => {
+    res.send("Event Registration & Feedback System API is running...");
+});
+
+
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Server is running  http://localhost:${PORT}`);
 });

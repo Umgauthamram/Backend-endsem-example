@@ -2,7 +2,8 @@ const { User, users } = require("../models/User");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
-exports.register = async (req, res) => {
+
+const register = async (req, res) => {
     try {
         const { username, password } = req.body;
         const existing = users.find(u => u.username === username);
@@ -23,7 +24,8 @@ exports.register = async (req, res) => {
     }
 };
 
-exports.login = async (req, res) => {
+// POST /login
+const login = async (req, res) => {
     try {
         const { username, password } = req.body;
         const user = users.find(u => u.username === username);
@@ -44,4 +46,9 @@ exports.login = async (req, res) => {
         console.error("Login Error:", err);
         return res.status(500).json({ message: "Internal server error." });
     }
+};
+
+module.exports = {
+    register,
+    login
 };
