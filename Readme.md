@@ -1,145 +1,166 @@
-npm i express dotenv bcryptjs jsonwebtoken cookie-parser
+npm install express cookie-parser bcrypt jsonwebtoken dotenv
+
 
 SERVER.js
-
-const express = require('express');
-const cookieParser = require('cookie-parser');
-const route = require('./route');
-require('dotenv').config();
+const express = require("express");
+const cookieParser = require("cookie-parser");
+const authRoutes = require("./routes/authRoutes");
+const feedbackRoutes = require("./routes/feedbackRoutes");
+require("dotenv").config();
 
 const app = express();
-const PORT = 8000;
-
 app.use(express.json());
 app.use(cookieParser());
-app.use('/api', route);
 
-app.get('/', (req, res) => res.send('Server running...'));
+app.use("/api/auth", authRoutes);
+app.use("/api", feedbackRoutes);
 
+const PORT = process.env.PORT || 3010;
 app.listen(PORT, () => {
-  console.log(`Server is running on port http://localhost:${PORT}`);
+  console.log(`Server is running on http://localhost:${PORT}`);
 });
 
-MIDDLEWARE.JS
 
-const jwt = require('jsonwebtoken');
 
-const userAuth = async (req, res, next) => {
+models/User.js
+
+class User {
+    constructor({ username, hashedPassword }) {
+        this.username = username;
+        this.hashedPassword = hashedPassword;
+        this.feedbacks = [];
+    }
+}
+
+const users = [];
+
+module.exports = { User, users };
+
+
+
+middleware/authMiddleware.js
+
+const jwt = require("jsonwebtoken");
+
+function authenticateToken(req, res, next) {
+    const token = req.cookies.token;
+
+    if (!token) {
+        return res.status(401).json({ message: "Missing token" });
+    }
+
     try {
-        const { token } = req.cookies;
-        if (!token) {
-            return res.status(401).json({ message: "Unauthorized: No token" });
-        }
-
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        if (!decoded) {
-            return res.status(403).json({ message: "Unauthorized: Invalid token" });
+        req.username = decoded.username;
+        next();
+    } catch (err) {
+        return res.status(403).json({ message: "Invalid token" });
+    }
+}
+
+module.exports = authenticateToken;
+
+
+controllers/authController.js
+
+
+const { User, users } = require("../models/User");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+
+exports.register = async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        const existing = users.find(u => u.username === username);
+
+        if (existing) {
+            return res.status(400).json({ message: "User already exists." });
         }
 
-        req.userName = decoded.userName; 
-        next();
-    } catch (error) {
-        res.status(401).json({ message: "Unauthorized", error });
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = new User({ username, hashedPassword });
+        users.push(newUser);
+
+        res.cookie("username", username, { httpOnly: true });
+        return res.status(200).json({ message: "User registered successfully." });
+    } catch (err) {
+        console.error("Register Error:", err);
+        return res.status(500).json({ message: "Internal server error." });
     }
 };
 
-module.exports = userAuth;
+exports.login = async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        const user = users.find(u => u.username === username);
 
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
 
-userController.js
+        const isMatch = await bcrypt.compare(password, user.hashedPassword);
+        if (!isMatch) {
+            return res.status(401).json({ message: "Invalid password." });
+        }
 
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
-const userData = [];
-
-const register = async (req, res) => {
-  const { userName, password } = req.body;
-
-  if (!userName || !password) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
-
-  try {
-    const existingUser = userData.find(user => user.userName === userName);
-    if (existingUser) return res.status(409).json({ message: "User already exists" });
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    userData.push({ id: Date.now(), userName, password: hashedPassword, feedbacks: [] });
-
-    res.cookie('cookie', userName, { maxAge: 60 * 60 * 1000 });
-    res.status(201).json({ message: "User registered successfully" });
-  } catch (err) {
-    res.status(500).json({ message: "Internal server error", err });
-  }
+        const token = jwt.sign({ username }, process.env.JWT_SECRET, { expiresIn: "2h" });
+        res.cookie("token", token, { httpOnly: true });
+        return res.status(200).json({ message: "User logged in." });
+    } catch (err) {
+        console.error("Login Error:", err);
+        return res.status(500).json({ message: "Internal server error." });
+    }
 };
 
-const login = async (req, res) => {
-  const { userName, password } = req.body;
 
-  if (!userName || !password) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
 
-  try {
-    const user = userData.find(u => u.userName === userName);
-    if (!user) return res.status(404).json({ message: "User not found" });
+controllers/feedbackController.js
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Wrong password" });
+const { users } = require("../models/User");
 
-    const token = jwt.sign({ userName }, process.env.JWT_SECRET, { expiresIn: '1h' });
+exports.postFeedback = (req, res) => {
+    const { service_name, feedback_text } = req.body;
+    const user = users.find(u => u.username === req.username);
 
-    res.cookie('token', token, { httpOnly: true, maxAge: 60 * 60 * 1000 });
-    res.status(200).json({ message: `Welcome ${userName}` });
-  } catch (err) {
-    res.status(500).json({ message: "Internal server error", err });
-  }
+    if (!user) {
+        return res.status(404).json({ message: "User not found" });
+    }
+
+    user.feedbacks.push({ service_name, feedback_text });
+    res.status(200).json({ message: "Feedback submitted" });
 };
 
-const feedBack = async (req, res) => {
-  const { serviceName, feedBack } = req.body;
+exports.getFeedback = (req, res) => {
+    const user = users.find(u => u.username === req.username);
 
-  if (!serviceName || !feedBack) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
-
-  try {
-    const user = userData.find(user => user.userName === req.userName);
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    user.feedbacks.push({ serviceName, feedBack });
-
-    res.status(200).json({ message: "Feedback submitted successfully" });
-  } catch (err) {
-    res.status(500).json({ message: "Internal server error", err });
-  }
-};
-
-const getFeed = async (req, res) => {
-  try {
-    const user = userData.find(user => user.userName === req.userName);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+        return res.status(404).json({ message: "User not found" });
+    }
 
     res.status(200).json({ feedbacks: user.feedbacks });
-  } catch (err) {
-    res.status(500).json({ message: "Internal server error", err });
-  }
 };
 
-module.exports = { register, login, feedBack, getFeed };
 
+routes/authRoutes.js
 
-routes.js
-
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { register, login, feedBack, getFeed } = require('./userController');
-const userAuth = require('./middleware');
+const { register, login } = require("../controllers/authController");
 
-router.post('/register', register);
-router.post('/login', login);
-router.post('/feedBack', userAuth, feedBack);
-router.get('/getFeed', userAuth, getFeed);
+router.post("/register", register);
+router.post("/login", login);
+
+module.exports = router;
+
+
+routes/feedbackRoutes.js
+
+const express = require("express");
+const router = express.Router();
+const authenticateToken = require("../middleware/authMiddleware");
+const { postFeedback, getFeedback } = require("../controllers/feedbackController");
+
+router.post("/feedback", authenticateToken, postFeedback);
+router.get("/feedback", authenticateToken, getFeedback);
 
 module.exports = router;
